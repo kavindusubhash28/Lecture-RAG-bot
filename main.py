@@ -29,7 +29,14 @@ def main():
         if question.lower() == "exit":
             break
 
+        # Step 1: retrieve relevant chunks
         results = pipeline.retrieve(question, top_k=3)
+
+        # Step 2: generate final answer
+        answer = pipeline.generate_answer(question, results)
+
+        print("\nFinal Answer:\n")
+        print(answer)
 
         print("\nTop retrieved chunks:\n")
         for i, result in enumerate(results, start=1):

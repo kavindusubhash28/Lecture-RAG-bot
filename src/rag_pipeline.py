@@ -1,6 +1,8 @@
 import json
 import os
 from pathlib import Path
+from openai import OpenAI
+
 
 import numpy as np
 import pdfplumber
