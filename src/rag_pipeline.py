@@ -1,12 +1,11 @@
 import json
 import os
 from pathlib import Path
-from openai import OpenAI
+from google import genai
 
 
 import numpy as np
 import pdfplumber
-from openai import OpenAI
 from sentence_transformers import SentenceTransformer
 
 
@@ -22,16 +21,40 @@ EMBEDDINGS_PATH = DATA_PROCESSED / "embeddings.npy"
 
 class RAGPipeline:
     def __init__(self, model_name: str = "all-MiniLM-L6-v2"):
-        # Load embedding model
         self.embedding_model = SentenceTransformer(model_name)
 
-        # OpenAI client
-        self.client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+        self._load_api_key_from_dotenv()
 
-        # Each chunk will be a dict:
-        # {"chunk_id": 0, "page": 1, "text": "..."}
+        api_key = os.getenv("GEMINI_API_KEY")
+        if not api_key:
+            raise ValueError("GEMINI_API_KEY is not set.")
+
+        self.client = genai.Client(api_key=api_key)
+
         self.chunks = []
         self.embeddings = None
+
+    def _load_api_key_from_dotenv(self):
+        """Load GEMINI_API_KEY from .env when it is not already set."""
+        if os.getenv("GEMINI_API_KEY"):
+            return
+
+        dotenv_path = Path(".env")
+        if not dotenv_path.exists():
+            return
+
+        with open(dotenv_path, "r", encoding="utf-8") as f:
+            for line in f:
+                line = line.strip()
+                if not line or line.startswith("#") or "=" not in line:
+                    continue
+
+                key, value = line.split("=", 1)
+                if key.strip() == "GEMINI_API_KEY":
+                    value = value.strip().strip('"').strip("'")
+                    if value:
+                        os.environ["GEMINI_API_KEY"] = value
+                    return
 
     def extract_pages_from_pdf(self, pdf_path: Path):
         """Extract text page by page from a PDF"""
@@ -136,9 +159,6 @@ class RAGPipeline:
         return results
 
     def generate_answer(self, question: str, retrieved_chunks):
-        """Generate final answer using retrieved chunks as context"""
-
-        # Combine retrieved chunks into one context block
         context = "\n\n".join(
             [f"(Page {chunk['page']}) {chunk['chunk']}" for chunk in retrieved_chunks]
         )
@@ -156,22 +176,12 @@ If the answer is not in the context, say:
 "I could not find the answer in the lecture notes."
 """
 
-        response = self.client.chat.completions.create(
-            model="gpt-4.1-mini",
-            messages=[
-                {
-                    "role": "system",
-                    "content": "You answer questions only from the provided lecture context."
-                },
-                {
-                    "role": "user",
-                    "content": prompt
-                }
-            ],
-            temperature=0
+        response = self.client.models.generate_content(
+            model="gemini-2.0-flash",
+            contents=prompt
         )
 
-        return response.choices[0].message.content
+        return response.text
 
     def ingest_pdf(self, pdf_path: Path):
         """Full pipeline: PDF -> pages -> chunk records -> embeddings -> save"""
