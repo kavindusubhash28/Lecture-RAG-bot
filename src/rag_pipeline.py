@@ -14,7 +14,6 @@ DATA_RAW = Path("data/raw")
 DATA_PROCESSED = Path("data/processed")
 
 # File locations
-PDF_PATH = DATA_RAW / "lecture.pdf"
 CHUNKS_PATH = DATA_PROCESSED / "chunks.json"
 EMBEDDINGS_PATH = DATA_PROCESSED / "embeddings.npy"
 
