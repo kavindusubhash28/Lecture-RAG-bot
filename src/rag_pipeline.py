@@ -71,6 +71,21 @@ class RAGPipeline:
 
         return pages
 
+    def extract_pages_from_all_pdfs(self, data_dir: Path):
+        """Extract pages from all PDFs in data/raw"""
+        all_pages = []
+
+        pdf_files = list(data_dir.glob("*.pdf"))
+
+        if not pdf_files:
+            raise FileNotFoundError(f"No PDF files found in {data_dir}")
+
+        for pdf_file in pdf_files:
+            pages = self.extract_pages_from_pdf(pdf_file)
+            all_pages.extend(pages)
+
+        return all_pages
+
     def chunk_text(self, text: str, chunk_size: int = 500, overlap: int = 100):
         """Split text into smaller chunks with overlap"""
         words = text.split()
