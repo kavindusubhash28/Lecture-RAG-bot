@@ -56,7 +56,7 @@ class RAGPipeline:
                     return
 
     def extract_pages_from_pdf(self, pdf_path: Path):
-        """Extract text page by page from a PDF"""
+        """Extract text page by page from one PDF"""
         pages = []
 
         with pdfplumber.open(pdf_path) as pdf:
@@ -64,6 +64,7 @@ class RAGPipeline:
                 text = page.extract_text()
                 if text and text.strip():
                     pages.append({
+                        "source": pdf_path.name,
                         "page": page_number,
                         "text": text
                     })
