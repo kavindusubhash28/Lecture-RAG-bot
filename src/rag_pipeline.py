@@ -200,9 +200,9 @@ If the answer is not in the context, say:
 
         return response.text
 
-    def ingest_pdf(self, pdf_path: Path):
-        """Full pipeline: PDF -> pages -> chunk records -> embeddings -> save"""
-        pages = self.extract_pages_from_pdf(pdf_path)
+    def ingest_pdfs(self, data_dir: Path):
+        """Full pipeline: all PDFs -> pages -> chunks -> embeddings -> save"""
+        pages = self.extract_pages_from_all_pdfs(data_dir)
         self.chunks = self.create_chunk_records(pages)
         self.embeddings = self.create_embeddings(self.chunks)
         self.save_processed_data()
