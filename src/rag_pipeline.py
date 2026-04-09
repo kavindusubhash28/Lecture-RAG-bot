@@ -106,11 +106,12 @@ class RAGPipeline:
         return chunks
 
     def create_chunk_records(self, pages, chunk_size: int = 500, overlap: int = 100):
-        """Create chunk records with chunk_id, page number, and text"""
+        """Create chunk records with chunk_id, source file, page number, and text"""
         chunk_records = []
         chunk_id = 0
 
         for page_data in pages:
+            source_name = page_data["source"]
             page_number = page_data["page"]
             page_text = page_data["text"]
 
@@ -119,6 +120,7 @@ class RAGPipeline:
             for chunk in page_chunks:
                 chunk_records.append({
                     "chunk_id": chunk_id,
+                    "source": source_name,
                     "page": page_number,
                     "text": chunk
                 })
