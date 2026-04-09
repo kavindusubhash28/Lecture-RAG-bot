@@ -168,6 +168,7 @@ class RAGPipeline:
         for idx in top_indices:
             results.append({
                 "chunk_id": self.chunks[idx]["chunk_id"],
+                "source": self.chunks[idx]["source"],
                 "page": self.chunks[idx]["page"],
                 "chunk": self.chunks[idx]["text"],
                 "score": float(similarities[idx])
