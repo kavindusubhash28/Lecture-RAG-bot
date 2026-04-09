@@ -37,6 +37,19 @@ def main():
             answer = pipeline.generate_answer(question, results)
             print("\nFinal Answer:\n")
             print(answer)
+
+            unique_sources = []
+            seen = set()
+
+            for result in results:
+                source_label = f"{result['source']} - Page {result['page']}"
+                if source_label not in seen:
+                    seen.add(source_label)
+                    unique_sources.append(source_label)
+
+            print("\nSources:")
+            for source in unique_sources:
+                print(f"- {source}")
         except Exception as e:
             print("\nLLM answer generation failed.")
             print(f"Reason: {e}")
