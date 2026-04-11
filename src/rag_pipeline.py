@@ -177,8 +177,13 @@ class RAGPipeline:
         return results
 
     def generate_answer(self, question: str, retrieved_chunks):
+        """Generate final answer using retrieved chunks as context"""
+
         context = "\n\n".join(
-            [f"(Page {chunk['page']}) {chunk['chunk']}" for chunk in retrieved_chunks]
+            [
+                f"[Source: {chunk['source']}, Page: {chunk['page']}] {chunk['chunk']}"
+                for chunk in retrieved_chunks
+            ]
         )
 
         prompt = f"""
