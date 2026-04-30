@@ -1,7 +1,7 @@
 import json
 import os
 from pathlib import Path
-from google import genai
+from openai import OpenAI
 
 
 import numpy as np
@@ -23,19 +23,14 @@ class RAGPipeline:
         self.embedding_model = SentenceTransformer(model_name)
 
         self._load_api_key_from_dotenv()
-
-        api_key = os.getenv("GEMINI_API_KEY")
-        if not api_key:
-            raise ValueError("GEMINI_API_KEY is not set.")
-
-        self.client = genai.Client(api_key=api_key)
+        self.client = None
 
         self.chunks = []
         self.embeddings = None
 
     def _load_api_key_from_dotenv(self):
-        """Load GEMINI_API_KEY from .env when it is not already set."""
-        if os.getenv("GEMINI_API_KEY"):
+        """Load GROQ_API_KEY from .env when it is not already set."""
+        if os.getenv("GROQ_API_KEY"):
             return
 
         dotenv_path = Path(".env")
@@ -49,11 +44,23 @@ class RAGPipeline:
                     continue
 
                 key, value = line.split("=", 1)
-                if key.strip() == "GEMINI_API_KEY":
+                if key.strip() == "GROQ_API_KEY":
                     value = value.strip().strip('"').strip("'")
                     if value:
-                        os.environ["GEMINI_API_KEY"] = value
+                        os.environ["GROQ_API_KEY"] = value
                     return
+
+    def _get_llm_client(self):
+        """Create Groq client only when answer generation is needed."""
+        if self.client is not None:
+            return self.client
+
+        api_key = os.getenv("GROQ_API_KEY")
+        if not api_key:
+            raise ValueError("GROQ_API_KEY is not set.")
+
+        self.client = OpenAI(api_key=api_key, base_url="https://api.groq.com/openai/v1")
+        return self.client
 
     def extract_pages_from_pdf(self, pdf_path: Path):
         """Extract text page by page from one PDF"""
@@ -178,6 +185,7 @@ class RAGPipeline:
 
     def generate_answer(self, question: str, retrieved_chunks):
         """Generate final answer using retrieved chunks as context"""
+        client = self._get_llm_client()
 
         context = "\n\n".join(
             [
@@ -199,12 +207,16 @@ If the answer is not in the context, say:
 "I could not find the answer in the lecture notes."
 """
 
-        response = self.client.models.generate_content(
-            model="gemini-2.0-flash",
-            contents=prompt
+        response = client.chat.completions.create(
+            model="llama-3.3-70b-versatile",
+            messages=[
+                {"role": "system", "content": "You are a helpful assistant."},
+                {"role": "user", "content": prompt},
+            ],
+            temperature=0.2,
         )
 
-        return response.text
+        return response.choices[0].message.content or ""
 
     def ingest_pdfs(self, data_dir: Path):
         """Full pipeline: all PDFs -> pages -> chunks -> embeddings -> save"""

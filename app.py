@@ -1,6 +1,4 @@
-import shutil
 from pathlib import Path
-
 import streamlit as st
 
 from src.rag_pipeline import (
@@ -12,9 +10,9 @@ from src.rag_pipeline import (
 
 st.set_page_config(page_title="Lecture RAG Bot", page_icon="📘", layout="wide")
 
+# ---------- Utility Functions ----------
 
 def save_uploaded_files(uploaded_files):
-    """Save uploaded PDFs into data/raw"""
     DATA_RAW.mkdir(parents=True, exist_ok=True)
 
     saved_files = []
@@ -28,62 +26,57 @@ def save_uploaded_files(uploaded_files):
 
 
 def clear_old_processed_data():
-    """Delete old processed files so new PDFs can be reprocessed"""
     if CHUNKS_PATH.exists():
         CHUNKS_PATH.unlink()
-
     if EMBEDDINGS_PATH.exists():
         EMBEDDINGS_PATH.unlink()
 
 
 def clear_raw_pdfs():
-    """Delete old PDFs from data/raw"""
     if DATA_RAW.exists():
         for pdf_file in DATA_RAW.glob("*.pdf"):
             pdf_file.unlink()
 
 
-def get_unique_sources(results):
-    """Extract unique sources from retrieved chunks"""
-    unique_sources = []
+def get_sources(results):
     seen = set()
+    sources = []
+    for r in results:
+        label = f"{r['source']} (p.{r['page']})"
+        if label not in seen:
+            seen.add(label)
+            sources.append(label)
+    return sources
 
-    for result in results:
-        source_label = f"{result['source']} - Page {result['page']}"
-        if source_label not in seen:
-            seen.add(source_label)
-            unique_sources.append(source_label)
 
-    return unique_sources
+# ---------- Session State ----------
 
-
-st.title("📘 Lecture RAG Bot")
-st.write("Upload lecture PDFs, ask questions, and get answers grounded in your documents.")
-
-# Initialize pipeline once
 if "pipeline" not in st.session_state:
     st.session_state.pipeline = None
 
 if "processed" not in st.session_state:
     st.session_state.processed = False
 
-if "results" not in st.session_state:
-    st.session_state.results = None
+if "chat_history" not in st.session_state:
+    st.session_state.chat_history = []  # stores (question, answer, sources)
 
-if "answer" not in st.session_state:
-    st.session_state.answer = None
+# ---------- UI ----------
 
-# Sidebar for upload and processing
+st.title(" Lecture RAG Bot")
+st.write("Chat with your lecture PDFs")
+
+# ---------- Sidebar ----------
+
 with st.sidebar:
-    st.header("Upload PDFs")
+    st.header(" Upload PDFs")
 
     uploaded_files = st.file_uploader(
-        "Choose one or more PDF files",
+        "Upload one or more PDFs",
         type=["pdf"],
         accept_multiple_files=True
     )
 
-    if st.button("Process PDFs"):
+    if st.button(" Process PDFs"):
         if not uploaded_files:
             st.warning("Please upload at least one PDF.")
         else:
@@ -91,80 +84,83 @@ with st.sidebar:
                 clear_raw_pdfs()
                 clear_old_processed_data()
 
-                saved_files = save_uploaded_files(uploaded_files)
+                saved = save_uploaded_files(uploaded_files)
 
-                pipeline = RAGPipeline()
-                pipeline.ingest_pdfs(DATA_RAW)
+                with st.spinner("Processing PDFs..."):
+                    pipeline = RAGPipeline()
+                    pipeline.ingest_pdfs(DATA_RAW)
 
                 st.session_state.pipeline = pipeline
                 st.session_state.processed = True
+                st.session_state.chat_history = []
 
-                st.success("PDFs processed successfully.")
-                st.write("Uploaded files:")
-                for file_name in saved_files:
-                    st.write(f"- {file_name}")
+                st.success("PDFs processed successfully!")
+                for f in saved:
+                    st.write(f"• {f}")
 
             except Exception as e:
-                st.error(f"Error processing PDFs: {e}")
+                st.error("Error processing PDFs.")
+                st.expander("Details").write(str(e))
 
-# Load existing processed data if available
-if st.session_state.pipeline is None and CHUNKS_PATH.exists() and EMBEDDINGS_PATH.exists():
+# ---------- Load existing data ----------
+
+if st.session_state.pipeline is None and CHUNKS_PATH.exists():
     try:
         pipeline = RAGPipeline()
         pipeline.load_processed_data()
         st.session_state.pipeline = pipeline
         st.session_state.processed = True
     except Exception as e:
-        st.error(f"Error loading processed data: {e}")
+        st.error("Failed to load existing data.")
+        st.expander("Details").write(str(e))
 
-# Main question interface
-if st.session_state.processed and st.session_state.pipeline is not None:
-    st.subheader("Ask a Question")
+# ---------- Chat Interface ----------
 
-    question = st.text_input("Enter your question:")
+if st.session_state.processed and st.session_state.pipeline:
 
-    if st.button("Get Answer"):
-        if not question.strip():
-            st.warning("Please enter a question.")
-        else:
-            pipeline = st.session_state.pipeline
+    # Display chat history
+    for q, a, sources in st.session_state.chat_history:
+        with st.chat_message("user"):
+            st.write(q)
 
-            try:
-                results = pipeline.retrieve(question, top_k=3)
-                st.session_state.results = results
+        with st.chat_message("assistant"):
+            st.write(a)
+            if sources:
+                st.caption("Sources: " + ", ".join(sources))
+
+    # User input
+    question = st.chat_input("Ask a question about your documents...")
+
+    if question:
+        pipeline = st.session_state.pipeline
+
+        # Show user message
+        with st.chat_message("user"):
+            st.write(question)
+
+        with st.chat_message("assistant"):
+            with st.spinner("Thinking..."):
 
                 try:
-                    answer = pipeline.generate_answer(question, results)
-                    st.session_state.answer = answer
+                    results = pipeline.retrieve(question, top_k=3)
+                    sources = get_sources(results)
+
+                    try:
+                        answer = pipeline.generate_answer(question, results)
+                    except Exception:
+                        answer = " Could not generate answer (API issue). Showing relevant content instead."
+
+                    st.write(answer)
+
+                    if sources:
+                        st.caption("Sources: " + ", ".join(sources))
+
+                    # Save to history
+                    st.session_state.chat_history.append((question, answer, sources))
+
                 except Exception as e:
-                    st.session_state.answer = None
-                    st.warning(f"LLM answer generation failed: {e}")
+                    st.error("Something went wrong during retrieval.")
+                    st.expander("Details").write(str(e))
 
-            except Exception as e:
-                st.error(f"Error during retrieval: {e}")
-
-    # Show answer
-    if st.session_state.answer:
-        st.subheader("Final Answer")
-        st.write(st.session_state.answer)
-
-    # Show sources
-    if st.session_state.results:
-        st.subheader("Sources")
-        sources = get_unique_sources(st.session_state.results)
-        for source in sources:
-            st.write(f"- {source}")
-
-        with st.expander("Show Retrieved Chunks"):
-            for i, result in enumerate(st.session_state.results, start=1):
-                st.markdown(
-                    f"**Result {i}** | "
-                    f"Chunk ID: `{result['chunk_id']}` | "
-                    f"Source: `{result['source']}` | "
-                    f"Page: `{result['page']}` | "
-                    f"Score: `{result['score']:.4f}`"
-                )
-                st.write(result["chunk"])
-                st.markdown("---")
 else:
-    st.info("Upload and process PDFs first to start asking questions.")
+    st.info("Upload and process PDFs to start chatting.")
