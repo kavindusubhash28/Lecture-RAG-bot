@@ -1,11 +1,9 @@
 import json
 import os
 from pathlib import Path
-from openai import OpenAI
-
-
 import numpy as np
 import pdfplumber
+import google.generativeai as genai
 from sentence_transformers import SentenceTransformer
 
 
@@ -19,8 +17,9 @@ EMBEDDINGS_PATH = DATA_PROCESSED / "embeddings.npy"
 
 
 class RAGPipeline:
-    def __init__(self, model_name: str = "all-MiniLM-L6-v2"):
+    def __init__(self, model_name: str = "all-MiniLM-L6-v2", gemini_model: str = "gemini-2.5-flash"):
         self.embedding_model = SentenceTransformer(model_name)
+        self.gemini_model = gemini_model
 
         self._load_api_key_from_dotenv()
         self.client = None
@@ -29,8 +28,8 @@ class RAGPipeline:
         self.embeddings = None
 
     def _load_api_key_from_dotenv(self):
-        """Load GROQ_API_KEY from .env when it is not already set."""
-        if os.getenv("GROQ_API_KEY"):
+        """Load GEMINI_API_KEY from .env when it is not already set."""
+        if os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY"):
             return
 
         dotenv_path = Path(".env")
@@ -44,22 +43,23 @@ class RAGPipeline:
                     continue
 
                 key, value = line.split("=", 1)
-                if key.strip() == "GROQ_API_KEY":
+                if key.strip() in {"GEMINI_API_KEY", "GOOGLE_API_KEY"}:
                     value = value.strip().strip('"').strip("'")
                     if value:
-                        os.environ["GROQ_API_KEY"] = value
+                        os.environ[key.strip()] = value
                     return
 
     def _get_llm_client(self):
-        """Create Groq client only when answer generation is needed."""
+        """Create Gemini client only when answer generation is needed."""
         if self.client is not None:
             return self.client
 
-        api_key = os.getenv("GROQ_API_KEY")
+        api_key = os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY")
         if not api_key:
-            raise ValueError("GROQ_API_KEY is not set.")
+            raise ValueError("GEMINI_API_KEY is not set.")
 
-        self.client = OpenAI(api_key=api_key, base_url="https://api.groq.com/openai/v1")
+        genai.configure(api_key=api_key)
+        self.client = genai.GenerativeModel(self.gemini_model)
         return self.client
 
     def extract_pages_from_pdf(self, pdf_path: Path):
@@ -207,16 +207,12 @@ If the answer is not in the context, say:
 "I could not find the answer in the lecture notes."
 """
 
-        response = client.chat.completions.create(
-            model="llama-3.3-70b-versatile",
-            messages=[
-                {"role": "system", "content": "You are a helpful assistant."},
-                {"role": "user", "content": prompt},
-            ],
-            temperature=0.2,
+        response = client.generate_content(
+            prompt,
+            generation_config={"temperature": 0.2},
         )
 
-        return response.choices[0].message.content or ""
+        return response.text or ""
 
     def ingest_pdfs(self, data_dir: Path):
         """Full pipeline: all PDFs -> pages -> chunks -> embeddings -> save"""

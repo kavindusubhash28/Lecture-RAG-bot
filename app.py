@@ -147,8 +147,8 @@ if st.session_state.processed and st.session_state.pipeline:
 
                     try:
                         answer = pipeline.generate_answer(question, results)
-                    except Exception:
-                        answer = " Could not generate answer (API issue). Showing relevant content instead."
+                    except Exception as e:
+                        answer = f"Could not generate answer. Error: {str(e)}"
 
                     st.write(answer)
 
