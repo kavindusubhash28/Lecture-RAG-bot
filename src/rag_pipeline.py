@@ -195,17 +195,22 @@ class RAGPipeline:
         )
 
         prompt = f"""
-Answer the question using only the context below.
+    You are a helpful AI tutor.
 
-Context:
-{context}
+    Answer ONLY from the provided context.
 
-Question:
-{question}
+    Rules:
+    - Do not make up information
+    - If answer missing, say you do not know
+    - Keep answers concise
+    - Mention source page if possible
 
-If the answer is not in the context, say:
-"I could not find the answer in the lecture notes."
-"""
+    Context:
+    {context}
+
+    Question:
+    {question}
+    """
 
         response = client.generate_content(
             prompt,
