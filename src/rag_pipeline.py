@@ -29,7 +29,7 @@ class RAGPipeline:
 
     def _load_api_key_from_dotenv(self):
         """Load GEMINI_API_KEY from .env when it is not already set."""
-        if os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY"):
+        if os.getenv("GEMINI_API_KEY"):
             return
 
         dotenv_path = Path(".env")
@@ -43,18 +43,18 @@ class RAGPipeline:
                     continue
 
                 key, value = line.split("=", 1)
-                if key.strip() in {"GEMINI_API_KEY", "GOOGLE_API_KEY"}:
+                if key.strip() == "GEMINI_API_KEY":
                     value = value.strip().strip('"').strip("'")
                     if value:
                         os.environ[key.strip()] = value
-                    return
+                    return 
 
     def _get_llm_client(self):
         """Create Gemini client only when answer generation is needed."""
         if self.client is not None:
             return self.client
 
-        api_key = os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY")
+        api_key = os.getenv("GEMINI_API_KEY")
         if not api_key:
             raise ValueError("GEMINI_API_KEY is not set.")
 
