@@ -124,11 +124,12 @@ class RAGPipeline:
 
             page_chunks = self.chunk_text(page_text, chunk_size=chunk_size, overlap=overlap)
 
-            for chunk in page_chunks:
+            for paragraph_number, chunk in enumerate(page_chunks, start=1):
                 chunk_records.append({
                     "chunk_id": chunk_id,
                     "source": source_name,
                     "page": page_number,
+                    "paragraph": paragraph_number,
                     "text": chunk
                 })
                 chunk_id += 1
@@ -177,6 +178,7 @@ class RAGPipeline:
                 "chunk_id": self.chunks[idx]["chunk_id"],
                 "source": self.chunks[idx]["source"],
                 "page": self.chunks[idx]["page"],
+                "paragraph": self.chunks[idx].get("paragraph", 1),
                 "chunk": self.chunks[idx]["text"],
                 "score": float(similarities[idx])
             })
